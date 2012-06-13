@@ -1,0 +1,45 @@
+{
+    // Whether or not to copy the resulting URL to the clipboard.
+    "copy_to_clipboard": true,
+
+    // Whether or not to open the resulting URL with a web browser.
+    "open_in_browser": false,
+
+    // The user that posts the snippet: if empty, the current system user name
+    // will be used.
+    "poster": "",
+
+    // Separator used when multiple selections must be pasted.
+    "sep": "\n\n# ------ 8< ------ 8< ------ 8< ------ 8< ------ 8< ------\n\n",
+
+    // The default syntax to use when the current syntax is not found or when
+    // "syntax_guess" is false.
+    "syntax_default": "text",
+
+    // Whether or not to guess the syntax of the code to paste:
+    // if false, always use "syntax_default"
+    "syntax_guess": true,
+
+    // Maps the current sublime syntax to the pastebin one.
+    "syntax_map": {
+        "c": "c",
+        "c++": "cpp",
+        "css": "css",
+        "diff": "diff",
+        "javascript": "js",
+        "json": "js",
+        "html": "html",
+        "go": "go",
+        "makefile": "make",
+        "perl": "perl",
+        "python": "python",
+        "python django": "python",
+        "restructuredtext": "rst",
+        "shell-unix-generic": "bash",
+        "sql": "sql",
+        "xml": "xml"
+    },
+
+    // The pastebin URL.
+    "url": "http://pastebin.ubuntu.com/"
+}
