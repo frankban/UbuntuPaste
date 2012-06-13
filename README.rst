@@ -1,6 +1,6 @@
-====================
-Sublime Ubuntu Paste
-====================
+============
+Ubuntu Paste
+============
 
 This Sublime Text 2 plugin can be used to paste code snippets on
 http://pastebin.ubuntu.com/
@@ -14,7 +14,7 @@ On MacOs: ``~/Library/Application Support/Sublime Text 2/Packages/``
 
 E.g.::
 
-    bzr branch lp:~frankban/+junk/UbuntuPaste ~/.config/sublime-text-2/Packages/UbuntuPaste
+    git clone https://github.com/frankban/UbuntuPaste.git ~/.config/sublime-text-2/Packages/UbuntuPaste
 
 Usage
 =====

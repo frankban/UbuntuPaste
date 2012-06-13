@@ -13,24 +13,32 @@ import sublime_plugin
 class UserInterface(object):
     """User interface for this plugin."""
 
-    def __init__(self, command_name):
+    def __init__(self, command_name, view):
         self.command_name = command_name.title()
+        self.view = view
         self.count = itertools.count()
+
+    def _get_content(self, contents):
+        return '{0}: {1}'.format(self.command_name, ' '.join(contents))
 
     def message(self, *contents):
         """Display a message in the status bar."""
-        content = ' '.join(contents)
-        sublime.status_message('{0}: {1}'.format(self.command_name, content))
+        sublime.status_message(self._get_content(contents))
+
+    def status(self, *contents):
+        """Add a status to the view, using contents as value."""
+        self.view.set_status(self.command_name, self._get_content(contents))
+
+    def progress(self, url):
+        """Show pasting progress."""
+        dots = '.' * (self.count.next() % 4)
+        self.status('Pasting to', url, '[', dots.ljust(3), ']')
 
     def error(self, *contents):
         """Display an error in the status bar."""
         self.message('ERROR:', *contents)
 
-    def progress(self, url):
-        """Show pasting progress."""
-        self.message('Pasting to {0}{1}'.format(url, '.' * self.count.next()))
-
-    def done(self, result, copy_to_clipboard, open_in_browser):
+    def success(self, result, copy_to_clipboard, open_in_browser):
         """Paste succeded."""
         contents = ['URL:', result, '|']
         if copy_to_clipboard:
@@ -39,6 +47,10 @@ class UserInterface(object):
             contents.append('Opened in your browser!')
         self.message(*contents)
 
+    def done(self):
+        """Erase the status messages."""
+        self.view.erase_status(self.command_name)
+
 
 class Settings(object):
     """Store and validate plugin settings."""
@@ -46,10 +58,6 @@ class Settings(object):
     def __init__(self, global_settings, local_settings):
         self._global_settings = global_settings
         self._local_settings = local_settings
-        self._errors = {
-            'url': 'Invalid URL.',
-            'copy_or_open': 'You need to either copy or open the URL.',
-            }
         self.error = None
         self.options = ()
 
@@ -70,12 +78,12 @@ class Settings(object):
         settings = self._local_settings
         url = settings.get('url')
         if url is None:
-            self.error = self._errors['url']
+            self.error = 'Invalid URL.'
             return False
         copy_to_clipboard = settings.get('copy_to_clipboard', True)
         open_in_browser = settings.get('open_in_browser', False)
         if not (copy_to_clipboard or open_in_browser):
-            self.error = self._errors['copy_or_open']
+            self.error = 'You need to either copy or open the URL.'
             return False
         poster = settings.get('poster')
         if not poster:
@@ -97,8 +105,7 @@ class Settings(object):
 class Paster(threading.Thread):
     """Paste code snippets to ubuntu pastebin."""
 
-    def __init__(self, ui, url, **kwargs):
-        self.ui = ui
+    def __init__(self, url, **kwargs):
         self.url = url
         self.data = kwargs
         self.error = None
@@ -106,11 +113,10 @@ class Paster(threading.Thread):
         threading.Thread.__init__(self)
 
     def run(self):
-        self.ui.progress(self.url)
         try:
             request = urllib2.Request(
                 self.url, urllib.urlencode(self.data),
-                headers={'User-Agent': self.ui.command_name})
+                headers={'User-Agent': 'SublimeText2'})
             response = urllib2.urlopen(request, timeout=5)
         except urllib2.HTTPError as err:
             self.error = 'HTTP error {0}.'.format(err.code)
@@ -119,15 +125,17 @@ class Paster(threading.Thread):
         else:
             self.result = response.url
 
-    def when_done(self, callback, *args):
-        if not self.is_alive():
-            return callback(self, *args)
-        self.ui.progress(self.url)
-        sublime.set_timeout(lambda: self.when_done(callback, *args), 200)
-
 
 class UbuntupasteCommand(sublime_plugin.TextCommand):
     """Paste code snippets on http://pastebin.ubuntu.com/."""
+
+    def __init__(self, *args, **kwargs):
+        self.ui = None
+        self._is_enabled = True
+        super(UbuntupasteCommand, self).__init__(*args, **kwargs)
+
+    def is_enabled(self):
+        return self._is_enabled
 
     def get_content(self, sep):
         """Return the contents of current selections.
@@ -141,7 +149,8 @@ class UbuntupasteCommand(sublime_plugin.TextCommand):
         return sep.join(view.substr(region) for region in regions)
 
     def run(self, edit):
-        self.ui = UserInterface(self.name())
+        self._is_enabled = False
+        self.ui = UserInterface(self.name(), self.view)
         settings = Settings(
             self.view.settings(),
             sublime.load_settings('UbuntuPaste.sublime-settings'))
@@ -153,10 +162,16 @@ class UbuntupasteCommand(sublime_plugin.TextCommand):
     def handle(
         self, url, copy_to_clipboard, open_in_browser, poster, sep, syntax):
         paster = Paster(
-            self.ui, url,
-            content=self.get_content(sep), poster=poster, syntax=syntax)
+            url, content=self.get_content(sep), poster=poster, syntax=syntax)
+        self.ui.progress(url)
         paster.start()
-        paster.when_done(self.done, copy_to_clipboard, open_in_browser)
+        self.wait(paster, copy_to_clipboard, open_in_browser)
+
+    def wait(self, paster, *args):
+        if not paster.is_alive():
+            return self.done(paster, *args)
+        self.ui.progress(paster.url)
+        sublime.set_timeout(lambda: self.wait(paster, *args), 200)
 
     def done(self, paster, copy_to_clipboard, open_in_browser):
         result = paster.result
@@ -165,6 +180,8 @@ class UbuntupasteCommand(sublime_plugin.TextCommand):
                 sublime.set_clipboard(result)
             if open_in_browser:
                 webbrowser.open(result)
-            self.ui.done(result, copy_to_clipboard, open_in_browser)
+            self.ui.success(result, copy_to_clipboard, open_in_browser)
         else:
             self.ui.error(paster.error)
+        self.ui.done()
+        self._is_enabled = True
